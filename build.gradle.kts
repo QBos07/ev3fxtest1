@@ -3,8 +3,9 @@ plugins {
     id("com.github.johnrengelman.shadow") version "7.1.0"
     id("org.openjfx.javafxplugin") version "0.0.8"
     application
+    //checkstyle
 }
-group = "com.test"
+group = "qbos.ev3fx.test1"
 version = "1.0-SNAPSHOT"
 
 val tornadofxVersion: String by rootProject
@@ -18,31 +19,22 @@ application {
 }
 
 dependencies {
-    implementation(kotlin("stdlib-jdk8", "1.5.31"))
-    implementation(kotlin("reflect", "1.5.31"))
     implementation("no.tornado:tornadofx:$tornadofxVersion")
     implementation(files("../lejos-ev3/lib/ev3/ev3classes.jar", "../lejos-ev3/lib/ev3/dbusjava.jar", "../lejos-ev3/lib/ev3/3rdparty/opencv-2411.jar"))
-    testImplementation(kotlin("test-testng", "1.5.31"))
+    //testImplementation(kotlin("test-testng", "1.5.31"))
+    constraints {
+        implementation(kotlin("reflect", "1.5.31"))
+    }
 }
+
+java.toolchain.languageVersion.set(JavaLanguageVersion.of(11))
 
 javafx {
     modules = listOf("javafx.controls", "javafx.graphics")
 }
 
-tasks {
-    compileKotlin {
-        kotlinOptions.jvmTarget = "11"
-    }
-    compileTestKotlin {
-        kotlinOptions.jvmTarget = "11"
-    }
-    compileJava{
-        version = "11"
-    }
-    compileTestJava{
-        version = "11"
-    }
-    wrapper {
-        gradleVersion = "7.2"
-    }
-}
+tasks.wrapper.get().gradleVersion = "7.3"
+tasks.compileKotlin.get().kotlinOptions.jvmTarget = "1.8"
+tasks.compileTestKotlin.get().kotlinOptions.jvmTarget = "1.8"
+tasks.compileJava.get().options.release.set(8)
+tasks.compileTestJava.get().options.release.set(8)
