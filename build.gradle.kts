@@ -4,6 +4,7 @@ plugins {
     id("org.openjfx.javafxplugin") version "0.0.8"
     application
     //checkstyle
+    id("org.jetbrains.dokka") version "1.6.0"
 }
 group = "qbos.ev3fx.test1"
 version = "1.0-SNAPSHOT"
