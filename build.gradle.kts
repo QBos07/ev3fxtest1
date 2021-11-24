@@ -39,3 +39,5 @@ tasks.compileKotlin.get().kotlinOptions.jvmTarget = "1.8"
 tasks.compileTestKotlin.get().kotlinOptions.jvmTarget = "1.8"
 tasks.compileJava.get().options.release.set(8)
 tasks.compileTestJava.get().options.release.set(8)
+@kotlin.Suppress("UNNECESSARY_NOT_NULL_ASSERTION")
+tasks.run.get().args!!.add("--dev-mode")
