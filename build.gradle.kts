@@ -10,13 +10,14 @@ group = "qbos.ev3fx.test1"
 version = "1.0-SNAPSHOT"
 
 val tornadofxVersion: String by rootProject
+val mainClassString: String by rootProject
 
 repositories {
     mavenCentral()
 }
 
 application {
-    mainClass.set("com.example.MainKt")
+    mainClass.set(mainClassString)
 }
 
 dependencies {
