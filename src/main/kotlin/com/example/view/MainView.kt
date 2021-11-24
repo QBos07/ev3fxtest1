@@ -8,5 +8,10 @@ class MainView : View("Hello TornadoFX") {
         label(title) {
             addClass(Styles.heading)
         }
+        button("Exit") {
+            action {
+                close()
+            }
+        }
     }
 }
