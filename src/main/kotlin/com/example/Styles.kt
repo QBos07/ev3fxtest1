@@ -13,6 +13,8 @@ class Styles : Stylesheet() {
             padding = box(10.px)
             fontSize = 20.px
             fontWeight = FontWeight.BOLD
+            fontFamily = "JetBrainsMono NF"
+            backgroundColor = multi(c(255,100,55,0.5))
         }
     }
 }
