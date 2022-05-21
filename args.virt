@@ -1,0 +1,13 @@
+--debug
+-xsi 12
+-ysi 12
+-xg 100
+-yg 30
+-xsp 200
+-ysp 100
+-zsp 700
+-xp X-Achse
+-yp Y-Achse
+-zp Z-Achse
+localhost
+-f pic2.bin

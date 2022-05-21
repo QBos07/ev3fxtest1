@@ -1,11 +1,7 @@
-import org.gradle.plugins.ide.idea.model.IdeaLanguageLevel
-import org.gradle.plugins.ide.idea.model.Module
-import org.gradle.plugins.ide.idea.model.SingleEntryModuleLibrary
-
 plugins {
-    kotlin("jvm") version "1.6.10"
-    id("com.github.johnrengelman.shadow") version "7.1.0"
-    //id("org.openjfx.javafxplugin") version "0.0.10"
+    kotlin("jvm") version "1.6.21"
+    //id("com.github.johnrengelman.shadow") version "7.1.0"
+    id("org.openjfx.javafxplugin") version "0.0.10"
     application
     //checkstyle
     id("org.jetbrains.dokka") version "1.6.10"
@@ -19,6 +15,12 @@ val mainClassString: String by rootProject
 
 repositories {
     mavenCentral()
+    /*maven {
+        url = uri("https://packages.jetbrains.team/maven/p/ij/intellij-dependencies")
+        content {
+            includeGroup("org.jetbrains.pty4j")
+        }
+    }*/
 }
 
 application {
@@ -27,30 +29,44 @@ application {
 
 dependencies {
     implementation("no.tornado:tornadofx:$tornadofxVersion")
-    implementation(files("../lejos-ev3/lib/ev3/ev3classes.jar", "../lejos-ev3/lib/ev3/dbusjava.jar", "/jna/dist/jna.jar"))
+    implementation(files("../lejos-ev3/lib/ev3/ev3classes.jar", "../lejos-ev3/lib/ev3/dbusjava.jar"))
     implementation("org.jetbrains.kotlinx:kotlinx-cli-jvm:0.3.4")
-    testImplementation(kotlin("test-testng", kotlin.coreLibrariesVersion))
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.1")
+    /*implementation("org.jetbrains.pty4j:pty4j:0.12.7") {
+        //exclude("org.jetbrains.pty4j", "purejavacomm")
+    }*/
+    //implementation("com.github.purejavacomm:purejavacomm:1.0.2.RELEASE")
+    //implementation("org.slf4j:slf4j-simple:1.7.36")
+    testImplementation(kotlin("test-testng", "1.6.21"))
     testImplementation("org.powermock:powermock-module-testng:2.0.9")
     testImplementation("org.powermock:powermock-api-mockito2:2.0.9")
-    testImplementation("org.mockito:mockito-core:4.3.1")
-    constraints {
-        implementation(kotlin("reflect", kotlin.coreLibrariesVersion))
-    }
+    testImplementation("org.mockito:mockito-core:4.5.1")
+    implementation(kotlin("reflect"))
+    implementation(kotlin("script-runtime", "1.6.21"))
 }
 
-java.toolchain.languageVersion.set(JavaLanguageVersion.of(8))
+java.toolchain.languageVersion.set(JavaLanguageVersion.of(17))
 
-/*javafx {
+javafx {
     modules = listOf("javafx.controls", "javafx.graphics")
-}*/
+}
 
 tasks.wrapper.get().gradleVersion = "7.4"
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     kotlinOptions.freeCompilerArgs += "-opt-in=kotlin.ExperimentalUnsignedTypes"
-    kotlinOptions.freeCompilerArgs += "-Xopt-in=kotlin.RequiresOptIn"
+    kotlinOptions.freeCompilerArgs += "-opt-in=kotlin.RequiresOptIn"
     tasks.compileTestKotlin.get().kotlinOptions.jvmTarget = "1.8"
 }
-//tasks.withType<JavaCompile>().configureEach { options.release.set(8) }
+tasks.withType<JavaCompile>().configureEach { options.release.set(8) }
+
+tasks.test {
+    failFast = false
+    useTestNG {
+        includeGroups(
+            "logger"
+        )
+    }
+}
 /*
 idea {
     module {

@@ -2,31 +2,14 @@
 
 package qbos.ev3fx.test1.cmdinterface
 
-import com.example.MyApp
 import kotlinx.cli.*
-import lejos.hardware.Brick
-import lejos.remote.ev3.RMIMenu
+import kotlinx.coroutines.*
 import lejos.remote.ev3.RMIEV3
+import lejos.remote.ev3.RMIMenu
+import qbos.ev3fx.test1.gui.MainApp
 import tornadofx.launch
-import tornadofx.runAsync
-import tornadofx.urlEncoded
 import java.io.File
-import java.io.IOException
-import java.rmi.ConnectIOException
-import java.rmi.Naming
-import java.util.*
-
-fun formatName(ev3: RMIEV3, menu: RMIMenu, ip: String): String {
-    if (ip == ev3.name && ev3.name == menu.name) return ip
-    if (ip != ev3.name && ev3.name == menu.name) return "$ip (${ev3.name} [E,M])"
-    if (ip == ev3.name && ev3.name != menu.name) return "$ip (${menu.name} [M])"
-    if (ip != ev3.name && ev3.name != menu.name && ip == menu.name) return "$ip (${ev3.name} [E])"
-    if (ip != ev3.name && ev3.name != menu.name && ip != menu.name) return "$ip (${ev3.name} - ${menu.name})"
-    throw Exception("unreachable")
-}
-
-fun logfor(pair: Pair<Pair<RMIEV3, RMIMenu>, String>, message: String) =
-    print("${formatName(pair.first.first, pair.first.second, pair.second)}: $message")
+import java.io.PrintStream
 
 fun main(args: Array<String>) {
     @Suppress("NAME_SHADOWING")
@@ -66,61 +49,70 @@ fun main(args: Array<String>) {
             val file = File(fileName)
             println("${file.absolutePath}: F: ${file.isFile} R: ${file.canRead()}")
             if (!file.canRead()) return@forEach
-            args += file.readText().split(" ", "\n", "\r")
+            args += file.readText().split(" ", "\n", "\r", "\t")
         }
         if (debugArgsFiles.isNotEmpty()) println(args.joinToString(" ", "args = \"", "\";"))
     }
-    run {
-        val newargs = mutableListOf<String>()
-        args.forEach { newargs += it.split(",", ";", "=", "(", ")", "{", "}", "[", "]") }
-        args = newargs
-    }
-    args = args.filter { it != "" }.toMutableList()
+    args = args.flatMap { it.split(",", ";", "=", "(", ")", "{", "}", "[", "]") }.filter { it != "" }.toMutableList()
 
     val praser = ArgParser("ev3fxtest1", strictSubcommandOptionsOrder = true)
 
     class Cmd(name: String, actionDescription: String) : Subcommand(name, actionDescription) {
         val debug by option(ArgType.Boolean).default(false)
+        val `in` by option(ArgType.String, description = "replaces stdin")
+        val out by option(ArgType.String, description = "replaces stdout")
+        val err by option(ArgType.String, description = "replaces stderr")
         val dontmove by option(ArgType.Boolean, shortName = "dm", description = "don't move somthing").default(false)
         val dfcon by option(ArgType.Boolean, "dontfailconnect", "dfc", "don't fail on connect").default(false)
         val hosts by argument(ArgType.String, description = "Hostnames of the EV3s").vararg()
-        val files by option(ArgFile, shortName = "f").multiple()
+        val files by option(ArgFile, shortName = "f").multiple().required()
+        val xmotorport by option(ArgType.String, "x-motor-port", "xp", "The Port of the motor for the x-axis").default("B")
+        val ymotorport by option(ArgType.String, "y-motor-port", "yp", "The Port of the motor for the y-axis").default("C")
+        val zmotorport by option(ArgType.String, "z-motor-port", "zp", "The Port of the motor for the z-axis").default("A")
+        val xsize by option(ArgType.Int, "x-size", "xsi", "the number of x's").required()
+        val ysize by option(ArgType.Int, "y-size", "ysi", "the number of y's").required()
+        val zservo by option(ArgType.Boolean, "z-servo", "zs", "if the z motor is a servo").default(false)
+        val xgap by option(ArgType.Int, "x-gap", "xg", "the rotaion of the x motor for the gap").required()
+        val ygap by option(ArgType.Int, "y-gap", "yg", "the rotaion of the y motor for the gap").required()
+        val zrot by option(ArgType.Int, "z-rotation", "zrot", "the rotation of the z motor needed to \"paint\"").default(360)
+        val xtype by option(ArgType.Choice("NMLG".toList(), {if (it.length != 1) throw Exception() else it[0]}), "x-type", "xt", "the type of the motor for x").default('M')
+        val ytype by option(ArgType.Choice("NMLG".toList(), {if (it.length != 1) throw Exception() else it[0]}), "y-type", "zt", "the type of the motor for y").default('L')
+        val ztype by option(ArgType.Choice("NMLG".toList(), {if (it.length != 1) throw Exception() else it[0]}), "z-type", "yt", "the type of the motor for z").default('M')
+        val xspeed by option(ArgType.Int, "x-speed", "xsp", "the rotation speed of motor x").default(10)
+        val yspeed by option(ArgType.Int, "y-speed", "ysp", "the rotation speed of motor y").default(10)
+        val zspeed by option(ArgType.Int, "z-speed", "zsp", "the rotation speed of motor z").default(10)
+        val oldpath by option(ArgType.Boolean, "no-path-finding", "nopath", "don't use a pathfinding like method").default(false)
         override fun execute() {
             fun debugfor(pair: Pair<Pair<RMIEV3, RMIMenu>, String>, message: String) =
-                if (debug) logfor(pair, "DEBUG $message") else Unit
+                if (debug) logfor(pair, message, "{DEBUG} ") else Unit
+
+            if (!`in`.isNullOrBlank()) System.setIn(File(`in`).inputStream())
+            if (!out.isNullOrBlank()) System.setOut(PrintStream(File(out).outputStream()))
+            if (!err.isNullOrBlank()) System.setErr(PrintStream(File(err).outputStream()))
 
             var ev3s = hosts.map { ip ->
-                try {
-                    Pair(
-                        Pair(Naming.lookup("//$ip/RemoteEV3") as RMIEV3, Naming.lookup("//$ip/RemoteMenu") as RMIMenu),
-                        ip
-                    )
-                } catch (e: IOException) {
-                    e
+                runBlocking(CoroutineName("NetworkConnect")) {
+                    async { connectCatching(ip) }
                 }
             }.run {
-                filterIsInstance<IOException>().run {
-                    forEach { e -> e.printStackTrace() }
-                    if (isNotEmpty()) {
-                        println("${if (dfcon) "Ignoring " else ""}$size connection issue${if (size > 1) "s" else ""}.${if (!dfcon) " Aborting!" else ""}")
-                        if (!dfcon) kotlin.system.exitProcess(1)
-                    }
-                }
-                filterIsInstance<Pair<Pair<RMIEV3, RMIMenu>, String>>()
-            }/*.run { Pair(                         // remap the outer list to multiple inner lists
-                    Pair(
-                        map { it.first.first },
-                        map { it.first.second }
-                    ),
-                    map { it.second }
-                ) }*/
-            var ev3ns = ev3s.mapNotNull {
+                runBlocking { awaitAll() }
+            }.handleConnectCatching(dfcon)
+            @Suppress("UNCHECKED_CAST")
+            ev3s = ev3s.mapNotNull {
                 if (it.first.second.executingProgramName != null) {
-                    do {
-                        logfor(it, "Programm \"${it.first.second.executingProgramName}\" is still running!")
+                    logfor(it, "Programm \"${it.first.second.executingProgramName}\" is still running!")
+                    while (true) {
                         logfor(it, "[A]bort, [I]gnore, [R]retry, [S]top, [G]o on ?: ")
-                        when (Scanner(System.`in`).next(".")) {
-                            "a" -> throw Exception("Programm \"${it.first.second.executingProgramName}\" is running! Aborting")
+                        when (Char(System.`in`.read()).lowercase()) {
+                            "a" -> throw Exception(
+                                "Programm \"${it.first.second.executingProgramName}\" is running on ${
+                                    formatName(
+                                        it.first.first,
+                                        it.first.second,
+                                        it.second
+                                    )
+                                }! Aborting"
+                            )
                             "i" -> {
                                 return@mapNotNull null
                             }
@@ -129,70 +121,48 @@ fun main(args: Array<String>) {
                             }
                             "g" -> return@mapNotNull it
                         }
-                    } while (true)
+                    }
                 } else {
                     debugfor(it, "OK!\n")
                     return@mapNotNull it
                 }
-            }
-            ev3s.mapNotNull {
-                if (it.first.second.executingProgramName != null) {
-                    while (true) {
-                        return@mapNotNull null
-                    }
-                } else {
-                    debugfor(it, "hi\n")
-                    return@mapNotNull it
-                }
-            }.forEach { println(it::class) }
-            ev3s.forEach { it.first.second.suspend() }
-            ev3s.forEach {
-                logfor(
+            } as List<Pair<Pair<RMIEV3, RMIMenu>, String>>
+            runBlocking(CoroutineName("Printing")) { ev3s.map { async(Dispatchers.IO) {
+                //it.first.second.suspend()
+                print(
                     it,
-                    "syss3 wfap\n"
-                ); it.first.first.audio.systemSound(3); it.first.first.keys.waitForAnyPress()
-            }
-            ev3s.forEach { it.first.second.resume() }
+                    ::debugfor,
+                    files,
+                    xsize,
+                    ysize,
+                    zservo,
+                    xgap,
+                    ygap,
+                    zrot,
+                    xmotorport,
+                    ymotorport,
+                    zmotorport,
+                    xtype,
+                    ytype,
+                    ztype,
+                    xspeed,
+                    yspeed,
+                    zspeed,
+                    oldpath
+                )
+                //it.first.second.resume()
+            } }.awaitAll() }
             kotlin.system.exitProcess(0)
         }
     }
     praser.subcommands(Cmd("cli", "commandline"))
-    val gargs by praser.argument(ArgType.String, "arguments", "Argumente for the graphical application").vararg()
-        .optional()
+    val gargs by praser.argument(ArgType.String, "arguments", "Argumente for the graphical application").vararg().optional()
     praser.parse(args.toTypedArray())
-    launch<MyApp>(gargs.toTypedArray())
-
-    /*printAll(
-        address.let { a ->
-            val bricks = mutableListOf<Brick>()
-            a.forEach { bricks += RemoteEV3(it) }
-            bricks
-        },
-        files.let { f ->
-            val realfiles = mutableListOf<File>()
-            f.forEach { realfiles += File(it) }
-            realfiles
-        },
-        rows, dryrun)*/
-    //printAll(address,files,rows,dryrun)
-
-
+    launch<MainApp>(gargs.toTypedArray())
 }
 
-fun printAll(bricksS: List<String>, filesS: List<String>, rows: UInt, dryrun: Boolean = false) {
-    val bricks = bricksS.forEach { b ->
-        try {
-        } catch (e: ConnectIOException) {
-        }
-    }
-}
-
-fun printOne(brick: Brick, data: UByteArray, rows: UInt, dryrun: Boolean = false) = runAsync {
-
-}
 
 object ArgFile : ArgType<File>(true) {
-    override val description get() = "Path"
+    override val description get() = "{ Path as String }"
     override fun convert(value: kotlin.String, name: kotlin.String) = File(value)
 }
-
