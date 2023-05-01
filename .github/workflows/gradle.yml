@@ -33,4 +33,4 @@ jobs:
     #- name: Build with Gradle
     #  run: ./gradlew build
     - name: Gradle Build Action
-      uses: gradle/gradle-build-action@v2.2.1
+      uses: gradle/gradle-build-action@v2.4.2
